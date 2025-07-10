@@ -4,7 +4,7 @@ import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'dart:math';
-import 'package:flutter_compass/flutter_compass.dart';
+//import 'package:flutter_compass/flutter_compass.dart';
 import 'dart:io' show Platform;
 import './game_screen.dart' hide MapScreen;
 import './map_screen.dart';
@@ -446,7 +446,7 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
     ];
 
     // 4) Get heading
-    final headingEvent = await FlutterCompass.events!.first;
+    final headingEvent = null; //await FlutterCompass.events!.first;
     final headingDegrees = headingEvent.heading ?? 0.0;
 
     // 5) Navigate with that complete path
