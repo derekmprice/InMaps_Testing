@@ -4,10 +4,13 @@ import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'dart:math';
-//import 'package:flutter_compass/flutter_compass.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'dart:io' show Platform;
+// carlota
+// Import game_screen.dart but hide MapScreen to avoid conflict.
 import './game_screen.dart' hide MapScreen;
 import './map_screen.dart';
+import './simple_mapbox_screen.dart'; // Add this import
 import './models/beacon.dart';
 import './utils/positioning.dart';
 import './utils/smoothed_position.dart';
@@ -22,7 +25,7 @@ class NavigationApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'InMaps',
+      title: 'Indoor Navigation',
       theme: ThemeData(primarySwatch: Colors.teal),
       home: BLEScannerPage(),
     );
@@ -84,6 +87,7 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
   @override
   void initState() {
     super.initState();
+  
     _selectedEvent = _events.isNotEmpty ? _events[0] : "";
     flutterReactiveBle.statusStream.listen((status) {
       debugPrint("Bluetooth status: $status");
@@ -97,7 +101,7 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
         userLocation = "${position.x.round()}, ${position.y.round()}";
       });
 
-      // Request path automatically when location updates and booth is selected
+      // Request path automatically when location updates and booth is selected <WILL CHANGE TO BE LOCAL>
       if (selectedBooth.isNotEmpty) {
         requestPath(selectedBooth);
       }
@@ -110,16 +114,12 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
     // Start position tracking
     positionTracker.start();
   }
-  final TextEditingController _boothController = TextEditingController();
-  final FocusNode _boothFocusNode = FocusNode();
 
   @override
   void dispose() {
     _scanSubscription?.cancel();
     _positionSubscription?.cancel();
     positionTracker.dispose();
-    _boothController.dispose();
-    _boothFocusNode.dispose();
     super.dispose();
   }
 
@@ -209,30 +209,10 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
   // Initialize with default hardcoded values if backend config fails
   void _initializeDefaultConfig() {
     setState(() {
-      gridCellSize = 40;
-      metersToGridFactor = 1.0;
-      txPower = -59;
       beaconIdToPosition = {
-        "14b00739" : [5  * gridCellSize, 18 * gridCellSize],
-        "14b6072G" : [6  * gridCellSize, 15 * gridCellSize],
-        "14b7072H" : [9  * gridCellSize, 7  * gridCellSize],
-        "14bC072N" : [8  * gridCellSize, 19 * gridCellSize],
-        "14bE072Q" : [9  * gridCellSize, 23 * gridCellSize],
-        "14bF072R" : [13 * gridCellSize, 23 * gridCellSize],
-        "14bK072V" : [15 * gridCellSize, 25 * gridCellSize],
-        "14bM072X" : [19 * gridCellSize, 23 * gridCellSize],
-        "14j006gQ" : [22 * gridCellSize, 23 * gridCellSize],
-        "14j606Gv": [23 * gridCellSize, 20 * gridCellSize],
-        "14j706Gw": [26 * gridCellSize, 18 * gridCellSize],
-        "14j706gX": [25 * gridCellSize, 15 * gridCellSize],
-        "14j906Gy": [27 * gridCellSize, 12 * gridCellSize],
-        "14jd06i0": [24 * gridCellSize, 9  * gridCellSize],
-        "14jj06i6": [24 * gridCellSize, 6  * gridCellSize],
-        "14jr06gF": [20 * gridCellSize, 6  * gridCellSize],
-        "14jr08Ef": [19 * gridCellSize, 3  * gridCellSize],
-        "14js06gG": [17 * gridCellSize, 4  * gridCellSize],
-        "14jv06gK": [13 * gridCellSize, 3  * gridCellSize],
-        "14jw08Ek": [11 * gridCellSize, 4  * gridCellSize],
+        "14j906Gy": [0, 0],
+        "14jr08Ef": [200, 0],
+        "14j606Gv": [0, 200],
       };
 
       beacon_mac_map = {
@@ -263,6 +243,8 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
         mac_to_id_map[mac] = id;
       });
 
+      metersToGridFactor = 2.0; // Default value
+      txPower = -59; // Default reference power at 1m
 
       isConfigLoaded = true;
       debugPrint("⚠️ Using default configuration");
@@ -389,15 +371,11 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
     });
   }
 
-// ------------------- Request Path -------------------
+  // ------------------- Request Path -------------------
   Future<void> requestPath(String boothName) async {
-    if (boothName.trim().isEmpty || userLocation.isEmpty) return;
+    if (boothName.trim().isEmpty || userLocation.isEmpty || !userLocation.contains(",")) return;
 
-    final start = userLocation
-        .split(",")
-        .map((e) => int.parse(e.trim()) ~/ gridCellSize)
-        .toList();
-
+    final start = userLocation.split(",").map((e) => int.parse(e.trim()) ~/ gridCellSize).toList();
     try {
       final response = await http.post(
         Uri.parse('$backendUrl/path'),
@@ -406,64 +384,44 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
       );
 
       if (response.statusCode == 200) {
-        final path = jsonDecode(response.body)["path"] as List;
+        final path = jsonDecode(response.body)["path"];
         setState(() {
           currentPath = List<List<dynamic>>.from(path);
         });
-
-        if (currentPath.isEmpty) {
-          debugPrint("⚠️ No path found to $boothName.");
-        } else {
-          debugPrint("🧭 Path to $boothName: " +
-              currentPath.map((p) => "(${p[0]}, ${p[1]})").join(" → ")
-          );
-        }
-      } else {
-        debugPrint("❌ /path error ${response.statusCode}");
       }
     } catch (e) {
       debugPrint("❌ Error requesting path: $e");
     }
   }
 
-// ------------------- Open Map Screen -------------------
-  Future<void> openMapScreen() async {
-    debugPrint("🔥 openMapScreen fired! selectedBooth=$selectedBooth userLocation=$userLocation");
+// Prepare to restructure the path to be generated either locally or on a POI press inside of map screen.
+// Selected booth will be done from the map instead of the main page.
+
+
+  // ------------------- Open Map Screen -------------------
+  void openMapScreen() async {
     if (userLocation.isEmpty || selectedBooth.isEmpty) return;
 
-    // 1) Convert to grid coords & capture start
-    final gridX = (currentPosition.x / gridCellSize).floor();
-    final gridY = (currentPosition.y / gridCellSize).floor();
+    // Convert the current position to grid coordinates
+    final gridX = (currentPosition.x / gridCellSize).round();
+    final gridY = (currentPosition.y / gridCellSize).round();
     final start = [gridX, gridY];
 
-    // 2) Fetch the backend path
-    await requestPath(selectedBooth);
+    final heading = await FlutterCompass.events!.first;
 
-    // 3) Prepend our start cell to the returned route
-    final displayPath = [
-      [gridX, gridY],
-      ...currentPath
-    ];
-
-    // 4) Get heading
-    final headingEvent = null; //await FlutterCompass.events!.first;
-    final headingDegrees = headingEvent.heading ?? 0.0;
-
-    // 5) Navigate with that complete path
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => MapScreen(
-          path: displayPath,
+          path: currentPath, // Path to be generated either locally or on a POI press inside of map screen.
           startLocation: start,
-          headingDegrees: headingDegrees,
+          headingDegrees: heading.heading ?? 0.0,
           initialPosition: currentPosition,
           selectedBoothName: selectedBooth,
         ),
       ),
     );
   }
-
 
   // ------------------- Fetch Booth Names from Backend -------------------
   Future<void> fetchBoothNames() async {
@@ -537,6 +495,29 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
             ),
             const SizedBox(height: 12),
 
+            // Display current position
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.teal[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Current Position:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 4),
+                  Text('X: ${currentPosition.x.toStringAsFixed(2)}, Y: ${currentPosition.y.toStringAsFixed(2)}'),
+                  SizedBox(height: 4),
+                  Text('Detected beacons: ${beaconList.length}'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
             // 2) Connect To Event (Beacon scan)
             SizedBox(
               width: double.infinity,
@@ -560,9 +541,7 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
             ),
             const SizedBox(height: 6),
             RawAutocomplete<String>(
-              textEditingController: _boothController,
-              focusNode: _boothFocusNode,
-              optionsBuilder: (TextEditingValue textEditingValue) {
+              optionsBuilder: (textEditingValue) {
                 if (textEditingValue.text.isEmpty) {
                   return const Iterable<String>.empty();
                 }
@@ -570,13 +549,14 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
                     .toLowerCase()
                     .contains(textEditingValue.text.toLowerCase()));
               },
-              onSelected: (String selection) {
+              onSelected: (selection) {
                 setState(() {
                   selectedBooth = selection;
-                  _boothController.text = selection;
                 });
+                requestPath(selection); // Automatically request path
               },
               fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                controller.text = selectedBooth;
                 return TextField(
                   controller: controller,
                   focusNode: focusNode,
@@ -589,7 +569,7 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
                       borderSide: BorderSide.none,
                     ),
                   ),
-                  onEditingComplete: onEditingComplete,
+                  onChanged: (value) => selectedBooth = value,
                 );
               },
               optionsViewBuilder: (context, onSelected, options) {
@@ -614,15 +594,7 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: (){
-                  if (!boothNames.contains(selectedBooth)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Please enter a valid booth name.")),
-                    );
-                    return;
-                  }
-                  openMapScreen();
-                },
+                onPressed: openMapScreen,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kTealColor,
                   foregroundColor: Colors.white,
@@ -632,6 +604,37 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
                 child: const Text("Show Map"),
               ),
             ),
+            const SizedBox(height: 12),
+
+            // Beacon information
+            if (beaconList.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Beacon Information:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 8),
+                    ...beaconList.map((beacon) {
+                      final distance = rssiToDistance(beacon.rssi ?? beacon.baseRssi, beacon.baseRssi);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4.0),
+                        child: Text(
+                          '${beacon.id}: RSSI ${beacon.rssi}dBm (≈${distance.toStringAsFixed(1)}m)',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
             const SizedBox(height: 12),
 
             // 7) Game Mode (Navigate to GameScreen)
@@ -658,6 +661,28 @@ class _BLEScannerPageState extends State<BLEScannerPage> {
                 child: const Text("Game Mode"),
               ),
             ),
+            const SizedBox(height: 12),
+
+            // Test Simple Map Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => SimpleMapScreen()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  textStyle: const TextStyle(fontSize: 16),
+                ),
+                child: const Text("Test Simple Map"),
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
         ),
       ),

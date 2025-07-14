@@ -1,0 +1,261 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -84.40206790027071,
+                            33.77477155584434
+                        ],
+                        [
+                            -84.40206565047049,
+                            33.774419508771885
+                        ],
+                        [
+                            -84.40160950343045,
+                            33.77442698920292
+                        ],
+                        [
+                            -84.40160950343045,
+                            33.77477295841919
+                        ],
+                        [
+                            -84.40206790027071,
+                            33.77477155584434
+                        ]
+                    ]
+                ]
+            },
+            "properties": {
+                "id": "poi_1752294649375_413",
+                "name": "New POI",
+                "description": "",
+                "link": "",
+                "icon": "marker",
+                "imageUrl": null,
+                "_appData": {
+                    "featureId": "3d7b1b5ca66bdb731973d84f546d3471"
+                }
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -84.40122141285374,
+                            33.77436480810036
+                        ],
+                        [
+                            -84.40188735378538,
+                            33.77436013282798
+                        ],
+                        [
+                            -84.40188679133523,
+                            33.7744218464065
+                        ],
+                        [
+                            -84.40206565047049,
+                            33.7744190412445
+                        ],
+                        [
+                            -84.40206677537034,
+                            33.77477108831965
+                        ],
+                        [
+                            -84.40122422510463,
+                            33.7747771661444
+                        ],
+                        [
+                            -84.40122141285374,
+                            33.77436480810036
+                        ]
+                    ]
+                ]
+            },
+            "properties": {
+                "id": "poi_1752294679024_42",
+                "name": "New POI",
+                "description": "",
+                "link": "",
+                "icon": "marker",
+                "imageUrl": null,
+                "_appData": {
+                    "featureId": "a17c8ed782fdf514fe9b735da2408c0b"
+                }
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -84.40162131488276,
+                    33.774658882237304
+                ]
+            },
+            "properties": {
+                "id": "poi_1752294721953_833",
+                "name": "New POI",
+                "description": "",
+                "link": "",
+                "icon": "marker",
+                "imageUrl": null,
+                "_appData": {
+                    "featureId": "f42bf2ad3acb27b51ff840e3ccfc99bb"
+                }
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        -84.40160983698489,
+                        33.774555031889165
+                    ],
+                    [
+                        -84.40165772382706,
+                        33.77455506677529
+                    ]
+                ]
+            },
+            "properties": {
+                "id": "poi_1752295274522_846",
+                "name": "Door3",
+                "description": "",
+                "link": "",
+                "icon": "entrance",
+                "imageUrl": null,
+                "_appData": {
+                    "featureId": "542b3ac0a3ecc3fca66a822a0feb5fb5"
+                }
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -84.40160885379775,
+                    33.774695648527725
+                ]
+            },
+            "properties": {
+                "id": "poi_1752295649552_163",
+                "name": "Door1",
+                "description": "",
+                "link": "",
+                "icon": "entrance",
+                "imageUrl": null,
+                "_appData": {
+                    "featureId": "e05b9023ee5f3f0d404247eb7da7d0ac"
+                }
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -84.40160828012097,
+                    33.774625550467604
+                ]
+            },
+            "properties": {
+                "id": "poi_1752295652252_651",
+                "name": "Door2",
+                "description": "",
+                "link": "",
+                "icon": "entrance",
+                "imageUrl": null,
+                "_appData": {
+                    "featureId": "41dd71e7a0e3850e318b9d75f6454348"
+                }
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -84.40160770644415,
+                    33.77449441448823
+                ]
+            },
+            "properties": {
+                "id": "poi_1752295654817_547",
+                "name": "Door4",
+                "description": "",
+                "link": "",
+                "icon": "entrance",
+                "imageUrl": null,
+                "_appData": {
+                    "featureId": "80e0ae01edaab430af86c5c9dcc4c3cf"
+                }
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -84.40152108125743,
+                    33.77473093596471
+                ]
+            },
+            "properties": {
+                "id": "poi_1752295657877_543",
+                "name": "EXIT",
+                "description": "",
+                "link": "",
+                "icon": "exit",
+                "imageUrl": null,
+                "_appData": {
+                    "featureId": "5b3f611799c51ae8736fe9bc995d6f73"
+                }
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -84.40144501984264,
+                    33.77466399599095
+                ]
+            },
+            "properties": {
+                "id": "poi_1752295720876_933",
+                "name": "Bathroom",
+                "description": "",
+                "link": "",
+                "icon": "toilet",
+                "imageUrl": null,
+                "_appData": {
+                    "featureId": "4c3865dcfe270dccbbd90aa8bf258e51"
+                }
+            }
+        }
+    ],
+    "_metadata": {
+        "version": "1.0",
+        "createdAt": "2025-01-14T17:00:00.000Z",
+        "mapView": {
+            "center": {
+                "lng": -84.40144501984264,
+                "lat": 33.77466399599095
+            },
+            "zoom": 19,
+            "bearing": 0,
+            "pitch": 0
+        }
+    }
+}

@@ -11,11 +11,8 @@ class BLEScannerService {
   final Map<String, int> scannedDevices = {};
   StreamSubscription<DiscoveredDevice>? _scanSubscription;
 
-  final Map<String, List<int>> beaconIdToPosition = {
-    "14j906Gy": [0, 0],
-    "14jr08Ef": [200, 0],
-    "14j606Gv": [0, 200],
-  };
+  // Empty map by default - positions will be loaded from backend
+  final Map<String, List<int>> beaconIdToPosition = {};
 
   void startScan(Function(String, int) onUpdate) {
     _scanSubscription?.cancel();

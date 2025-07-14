@@ -9,8 +9,6 @@ import json
 import ast
 import math
 import re
-from collections import deque
-
 
 app = FastAPI()
 
@@ -51,13 +49,9 @@ def load_booth_data(csv_path):
             booth_type = "beacon"
         elif "booth" in type.lower():
             booth_type = "booth"
-        elif "zone" in type.lower():
-            booth_type = "Zone"
-        elif "stairs" in type.lower():
-            booth_type = "stairs"
         else:
             booth_type = "other"
-
+            
         # Get the name from the row
         name = str(row["Name"]).strip()
 
@@ -81,50 +75,46 @@ def load_booth_data(csv_path):
     print(f"📊 Total booths loaded: {len(booths)}")
     return booths
 
-def generate_venue_grid(csv_path, grid_size=CELL_SIZE):
+def generate_venue_grid(csv_path, canvas_width=800, canvas_height=600, grid_size=CELL_SIZE):
     df = pd.read_csv(csv_path)
-    parsed = []
-    for cell in df["Coordinates"]:
-        if not isinstance(cell, str): continue
-        coord_str = re.sub(r'([{,]\s*)(\w+)\s*:', r'\1"\2":', cell)
+    grid_width = canvas_width // grid_size
+    grid_height = canvas_height // grid_size
+    venue_grid = np.ones((grid_height, grid_width), dtype=int)
+
+    for _, row in df.iterrows():
+        coord_cell = row["Coordinates"]
+        if not isinstance(coord_cell, str):
+            continue
         try:
-            coords = json.loads(coord_str)
-            parsed.append(coords)
-        except json.JSONDecodeError:
+            coord_str = re.sub(r'([{,]\s*)(\w+)\s*:', r'\1"\2":', coord_cell)
+            coords    = json.loads(coord_str)
+        except Exception:
             continue
 
-    max_x = max(c["end"]["x"] for c in parsed)
-    max_y = max(c["end"]["y"] for c in parsed)
-    width  = (max_x + grid_size) // grid_size
-    height = (max_y + grid_size) // grid_size
-    grid = np.ones((height, width), dtype=int)
+        if any(t in row["Name"].lower() for t in ["blocker", "booth", "bathroom", "other"]):
+            start_px_x = int(coords["start"]["x"])
+            start_px_y = int(coords["start"]["y"])
+            end_px_x = int(coords["end"]["x"])
+            end_px_y = int(coords["end"]["y"])
 
-    for coords in parsed:
-        sx, sy = coords["start"]["x"], coords["start"]["y"]
-        ex, ey = coords["end"]["x"],   coords["end"]["y"]
-        for gx in range(sx//grid_size, ex//grid_size + 1):
-            for gy in range(sy//grid_size, ey//grid_size + 1):
-                if 0 <= gx < width and 0 <= gy < height:
-                    grid[gy][gx] = 0
-    return grid.tolist()
+            # Compute the grid cells covered by the booth/blocker area
+            start_grid_x = start_px_x // grid_size
+            start_grid_y = start_px_y // grid_size
+            end_grid_x = end_px_x // grid_size
+            end_grid_y = end_px_y // grid_size
+
+            for gx in range(start_grid_x, end_grid_x + 1):
+                for gy in range(start_grid_y, end_grid_y + 1):
+                    if 0 <= gx < grid_width and 0 <= gy < grid_height:
+                        venue_grid[gy][gx] = 0  # Mark grid cell as obstacle (blocked)
+
+    return venue_grid.tolist()
 
 
 
 
 booth_data = load_booth_data(CSV_PATH)
 VENUE_GRID = generate_venue_grid(CSV_PATH)
-WALKABLE_ZONES = []
-STAIRS_ZONES = []
-YELLOW_ZONES = []
-
-for booth in booth_data:
-    if booth["type"].lower() == "zone" and booth["name"].strip().lower() == "walkable":
-        start = (int(booth["area"]["start"]["x"] // CELL_SIZE), int(booth["area"]["start"]["y"] // CELL_SIZE))
-        end   = (int(booth["area"]["end"]["x"]   // CELL_SIZE), int(booth["area"]["end"]["y"]   // CELL_SIZE))
-        WALKABLE_ZONES.append({
-            "start": start,
-            "end": end
-        })
 
 # Mapping between iOS beacon IDs and Android MAC addresses
 BEACON_MAC_MAP = {
@@ -149,46 +139,16 @@ BEACON_MAC_MAP = {
     "14jv06gK": "00:FA:B6:31:02:C9",
     "14jw08Ek": "00:FA:B6:30:C2:E2"
 }
-NAME_TO_ID = {
-    "Beacon 1":  "14b00739",
-    "Beacon 2":  "14b6072G",
-    "Beacon 3":  "14b7072H",
-    "Beacon 4":  "14bC072N",
-    "Beacon 5":  "14bE072Q",
-    "Beacon 6":  "14bF072R",
-    "Beacon 7":  "14bK072V",
-    "Beacon 8":  "14bM072X",
-    "Beacon 9":  "14j006gQ",
-    "Beacon 10": "14j606Gv",
-    "Beacon 11": "14j706Gw",
-    "Beacon 12": "14j706gX",
-    "Beacon 13": "14j906Gy",
-    "Beacon 14": "14jd06i0",
-    "Beacon 15": "14jj06i6",
-    "Beacon 16": "14jr06gF",
-    "Beacon 17": "14jr08Ef",
-    "Beacon 18": "14js06gG",
-    "Beacon 19": "14jv06gK",
-    "Beacon 20": "14jw08Ek",
-}
 
 # Create reverse mapping (MAC to ID)
 MAC_TO_ID_MAP = {mac: id for id, mac in BEACON_MAC_MAP.items()}
 
 # Beacon positions (using iOS IDs for consistency with frontend)
-BEACON_POSITIONS = {}
-for b in booth_data:
-    if b["type"] != "beacon":
-        continue
-    ascii_id = NAME_TO_ID.get(b["name"])
-    if not ascii_id:
-        continue
-    BEACON_POSITIONS[ascii_id] = (
-        int(b["center"]["x"] // CELL_SIZE),
-        int(b["center"]["y"] // CELL_SIZE),
-    )
-
-
+# BEACON_POSITIONS = {
+#     "14j906Gy": (0, 0),
+#     "14jr08Ef": (1, 0),
+#     "14j606Gv": (0, 1)
+# }
 
 # ====== Models ======
 class BLEReading(BaseModel):
@@ -263,46 +223,42 @@ def get_path(request: PathRequest):
         print("❌ Booth not found:", booth_name)
         return JSONResponse(content={"error": "Booth not found"}, status_code=404)
 
-    # Convert booth coordinates to grid coordinates
-    goal_x = int(booth["center"]["x"] // CELL_SIZE)
-    goal_y = int(booth["center"]["y"] // CELL_SIZE)
-    n_rows, n_cols = len(VENUE_GRID), len(VENUE_GRID[0])
-    goal_x = max(0, min(goal_x, n_cols - 1))
-    goal_y = max(0, min(goal_y, n_rows - 1))
-    goal_grid = (goal_x, goal_y)
+    cell_size = 50
+    goal_grid = (
+        int(booth["center"]["x"] // CELL_SIZE),
+        int(booth["center"]["y"] // CELL_SIZE)
+    )
+
+    def find_nearest_free_cell(goal, grid):
+        directions = [
+            (0, 1), (1, 0), (-1, 0), (0, -1),
+            (1, 1), (-1, -1), (1, -1), (-1, 1)
+        ]
+        for dx, dy in directions:
+            nx, ny = goal[0] + dx, goal[1] + dy
+            if 0 <= nx < len(grid[0]) and 0 <= ny < len(grid):
+                if grid[ny][nx] == 1:
+                    return (nx, ny)
+        return None
 
     print(f"📍 Routing from {request.from_} to grid cell {goal_grid}")
     print("🧱 Sample grid slice at goal:")
     print(np.array(VENUE_GRID)[goal_grid[1]-1:goal_grid[1]+2, goal_grid[0]-1:goal_grid[0]+2])
 
-    # Check if start point is walkable
-    if not is_inside_area(request.from_[0], request.from_[1], WALKABLE_ZONES):
-        print("❌ Start point is not in a walkable area")
-        return JSONResponse(
-            content={"error": "Start point is not in a walkable area"},
-            status_code=400
-        )
-
-    # Check if goal point is walkable
-    if not is_inside_area(goal_grid[0], goal_grid[1], WALKABLE_ZONES):
-        print("❌ Goal point is not in a walkable area")
-        return JSONResponse(
-            content={"error": "Goal point is not in a walkable area"},
-            status_code=400
-        )
+    # 🔁 If goal is blocked, find a nearby free cell
+    if VENUE_GRID[goal_grid[1]][goal_grid[0]] == 0:
+        print("⚠️ Goal is blocked. Searching for nearby free cell...")
+        new_goal = find_nearest_free_cell(goal_grid, VENUE_GRID)
+        if not new_goal:
+            print("❌ No valid nearby goal found.")
+            return {"path": []}
+        print(f"✅ Redirected goal to: {new_goal}")
+        goal_grid = new_goal
 
     path = a_star(tuple(request.from_), goal_grid)
     print(f"🧭 Final path: {path}")
     if path:
         print(f"🏁 Last cell in path: {path[-1]}, Target goal: {goal_grid}")
-    else:
-        print("❌ No path found between start and goal points")
-        print(f"Start point walkable: {is_inside_area(request.from_[0], request.from_[1], WALKABLE_ZONES)}")
-        print(f"Goal point walkable: {is_inside_area(goal_grid[0], goal_grid[1], WALKABLE_ZONES)}")
-        print(f"Start point stairs: {is_inside_area(request.from_[0], request.from_[1], STAIRS_ZONES)}")
-        print(f"Goal point stairs: {is_inside_area(goal_grid[0], goal_grid[1], STAIRS_ZONES)}")
-        print(f"Start point yellow: {is_inside_area(request.from_[0], request.from_[1], YELLOW_ZONES)}")
-        print(f"Goal point yellow: {is_inside_area(goal_grid[0], goal_grid[1], YELLOW_ZONES)}")
 
     return {"path": path}
 
@@ -316,49 +272,21 @@ def get_booth_by_id(booth_id: int):
     booth = next((b for b in booth_data if b["booth_id"] == booth_id), None)
     return booth or {"error": "Booth not found"}
 
-
 @app.get("/map-data")
 def get_map_data():
-    global WALKABLE_ZONES, STAIRS_ZONES, YELLOW_ZONES
     visual_elements = []
-    WALKABLE_ZONES.clear()  # Clear old walkable zones first
-    STAIRS_ZONES.clear()    # Clear old stairs zones
-    YELLOW_ZONES.clear()    # Clear old yellow zones
 
     for booth in booth_data:
-        element = {
+        visual_elements.append({
             "name": booth["name"],
             "description": booth["description"],
             "type": booth["type"],
             "start": booth["area"]["start"],
             "end": booth["area"]["end"]
-        }
-        visual_elements.append(element)
 
-        # Convert booth coordinates to grid coordinates
-        start_x = int(booth["area"]["start"]["x"] // CELL_SIZE)
-        start_y = int(booth["area"]["start"]["y"] // CELL_SIZE)
-        end_x   = int(booth["area"]["end"]["x"]   // CELL_SIZE)
-        end_y   = int(booth["area"]["end"]["y"]   // CELL_SIZE)
-        area = {
-            "start": (start_x, start_y),
-            "end":   (end_x, end_y)
-        }
+        })
 
-        # Categorize areas by type
-        booth_type = booth["type"].lower()
-        if booth_type == "zone":
-            name = booth["name"].strip().lower()
-            if name == "walkable":
-                WALKABLE_ZONES.append(area)
-            elif name == "stairs":
-                STAIRS_ZONES.append(area)
-            elif name == "yellow":
-                YELLOW_ZONES.append(area)
-
-    print(f"✅ Loaded {len(WALKABLE_ZONES)} walkable zones, {len(STAIRS_ZONES)} stairs zones, {len(YELLOW_ZONES)} yellow zones.")
     return JSONResponse(content={"elements": visual_elements})
-
 
 @app.get("/config")
 def get_config():
@@ -375,39 +303,39 @@ def get_config():
 def calibrate_system(data: CalibrationRequest):
     """
     Calibrate the system based on a known physical distance between two beacons
-
+    
     This endpoint updates the METERS_TO_GRID_FACTOR based on the provided information
     """
     global METERS_TO_GRID_FACTOR
-
+    
     # Get beacon positions
     beacon1_pos = BEACON_POSITIONS.get(data.beacon1_id)
     beacon2_pos = BEACON_POSITIONS.get(data.beacon2_id)
-
+    
     if not beacon1_pos or not beacon2_pos:
         return JSONResponse(
-            content={"error": "One or both beacon IDs not found"},
+            content={"error": "One or both beacon IDs not found"}, 
             status_code=400
         )
-
+    
     # Calculate grid distance between beacons
     dx = beacon2_pos[0] - beacon1_pos[0]
     dy = beacon2_pos[1] - beacon1_pos[1]
-    grid_distance = math.sqrt(dx*2 + dy*2)
-
+    grid_distance = math.sqrt(dx**2 + dy**2)
+    
     # Ensure we have a valid physical distance
     if data.known_distance_meters <= 0:
         return JSONResponse(
-            content={"error": "Physical distance must be greater than zero"},
+            content={"error": "Physical distance must be greater than zero"}, 
             status_code=400
         )
-
+    
     # Calculate new meters-to-grid factor
     new_factor = grid_distance / data.known_distance_meters
-
+    
     # Update the global factor
     METERS_TO_GRID_FACTOR = new_factor
-
+    
     return {
         "success": True,
         "previousFactor": METERS_TO_GRID_FACTOR,
@@ -417,32 +345,6 @@ def calibrate_system(data: CalibrationRequest):
     }
 
 # ====== A* Algorithm ======
-def is_inside_area(x, y, areas):
-    for area in areas:
-        sx, sy = area["start"]
-        ex, ey = area["end"]
-        min_x, max_x = min(sx, ex), max(sx, ex)
-        min_y, max_y = min(sy, ey), max(sy, ey)
-        if min_x <= x <= max_x and min_y <= y <= max_y:
-            return True
-    return False
-
-def get_area_cost(x, y):
-    # Default cost for non-walkable areas
-    if not is_inside_area(x, y, WALKABLE_ZONES):
-        return float('inf')
-
-    # Higher cost for stairs areas
-    if is_inside_area(x, y, STAIRS_ZONES):
-        return 5.0  # Penalize stairs but still allow passage
-
-    # Slightly higher cost for yellow zones
-    if is_inside_area(x, y, YELLOW_ZONES):
-        return 2.0  # Small penalty for yellow zones
-
-    # Normal cost for walkable areas
-    return 1.0
-
 def a_star(start, goal):
     def heuristic(a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -451,47 +353,34 @@ def a_star(start, goal):
     open_set = [(heuristic(start, goal), 0, start, [])]
     visited = set()
 
-    print(f"🎯 Starting A* search from {start} to {goal}")
-    print(f"Initial walkable zones: {WALKABLE_ZONES}")
-    print(f"Initial stairs zones: {STAIRS_ZONES}")
-    print(f"Initial yellow zones: {YELLOW_ZONES}")
-
     while open_set:
-        est_total_cost, path_cost, current, path = heappop(open_set)
+            est_total_cost, path_cost, current, path = heappop(open_set)
 
-        if current == goal:
-            print(f"✅ Path found! Cost: {path_cost}")
-            return path + [current]
+            if current == goal:
+                return path + [current]
 
-        if current in visited:
-            continue
-        visited.add(current)
+            if current in visited:
+                continue
+            visited.add(current)
 
-        for dx, dy in neighbors:
-            nx, ny = current[0] + dx, current[1] + dy
+            for dx, dy in neighbors:
+                nx, ny = current[0] + dx, current[1] + dy
 
-            # Check bounds
-            if 0 <= nx < len(VENUE_GRID[0]) and 0 <= ny < len(VENUE_GRID):
-                # Get movement cost for this cell
-                move_cost = get_area_cost(nx, ny)
+                # Check bounds
+                if 0 <= nx < len(VENUE_GRID[0]) and 0 <= ny < len(VENUE_GRID):
+                    # Check if the cell is walkable (1 = free space)
+                    if VENUE_GRID[ny][nx] == 1 and (nx, ny) not in visited:
+                        next_cost = path_cost + 1
+                        estimated_total = next_cost + heuristic((nx, ny), goal)
+                        heappush(open_set, (
+                            estimated_total,
+                            next_cost,
+                            (nx, ny),
+                            path + [current]
+                        ))
 
-                # Skip if cell is not walkable (infinite cost)
-                if move_cost == float('inf'):
-                    continue
-
-                if (nx, ny) not in visited:
-                    next_cost = path_cost + move_cost
-                    estimated_total = next_cost + heuristic((nx, ny), goal)
-                    heappush(open_set, (
-                        estimated_total,
-                        next_cost,
-                        (nx, ny),
-                        path + [current]
-                    ))
-
-    print("❌ No path found in A* search")
     return []
-
+    
 @app.get("/")
 def root():
     return {"message": "InMaps backend is running!"}

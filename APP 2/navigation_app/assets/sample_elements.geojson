@@ -1,0 +1,59 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Registration Booth",
+        "type": "booth",
+        "description": "Check-in and registration for the event"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-84.3965, 33.7758],
+          [-84.3963, 33.7758], 
+          [-84.3963, 33.7756],
+          [-84.3965, 33.7756],
+          [-84.3965, 33.7758]
+        ]]
+      }
+    },
+    {
+      "type": "Feature", 
+      "properties": {
+        "name": "Tech Company A",
+        "type": "booth",
+        "description": "Software development company showcase"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-84.3962, 33.7758],
+          [-84.3960, 33.7758],
+          [-84.3960, 33.7756], 
+          [-84.3962, 33.7756],
+          [-84.3962, 33.7758]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Emergency Exit",
+        "type": "blocker", 
+        "description": "Emergency exit - keep clear"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-84.3959, 33.7757],
+          [-84.3958, 33.7757],
+          [-84.3958, 33.7756],
+          [-84.3959, 33.7756], 
+          [-84.3959, 33.7757]
+        ]]
+      }
+    }
+  ]
+}
