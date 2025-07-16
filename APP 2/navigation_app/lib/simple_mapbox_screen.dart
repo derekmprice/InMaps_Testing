@@ -14,7 +14,10 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
   List<Polygon> geoJsonPolygons = [];
   List<Marker> geoJsonMarkers = [];
   List<Polyline> geoJsonPolylines = [];
+  List<Polyline> graphEdges = [];
+  List<Marker> graphNodes = [];
   bool isLoading = true;
+  bool showGraph = false;
   
   // Center of your GeoJSON polygons (updated for draft_elements.geojson)
   static const LatLng centerLocation = LatLng(33.77466, -84.40163);  // Center of draft polygons
@@ -36,7 +39,7 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
       print("🔍 Starting to load GeoJSON...");
       
       // Load GeoJSON from assets
-      String jsonString = await rootBundle.loadString('assets/draft_elements.geojson');
+      String jsonString = await rootBundle.loadString('assets/DemoDayRoughDraft.geojson');
       
       print("📄 Raw JSON length: ${jsonString.length}");
       print("📄 First 100 chars: ${jsonString.length > 100 ? jsonString.substring(0, 100) : jsonString}");
@@ -51,6 +54,8 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
       List<Polygon> polygons = [];
       List<Marker> markers = [];
       List<Polyline> polylines = [];
+      List<Polyline> graphEdgeLines = [];
+      List<Marker> graphNodeMarkers = [];
       
       // Parse features from GeoJSON
       final features = geoJsonData['features'] as List?;
@@ -66,8 +71,20 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
         final String name = properties['name'] ?? 'Unknown';
         final String icon = properties['icon'] ?? 'marker';
         
+        // Skip features with missing or invalid coordinates
+        if (geometry['coordinates'] == null || 
+            (geometry['coordinates'] is List && (geometry['coordinates'] as List).isEmpty)) {
+          print("⚠️ Skipping feature with missing coordinates: $name");
+          continue;
+        }
+        
         if (geometry['type'] == 'Polygon') {
           final coordinates = geometry['coordinates'][0]; // First ring of polygon
+          
+          if (coordinates == null || coordinates.isEmpty) {
+            print("⚠️ Skipping polygon with empty coordinates: $name");
+            continue;
+          }
           
           List<LatLng> points = coordinates.map<LatLng>((coord) => 
             LatLng(coord[1], coord[0]) // Note: GeoJSON is [lng, lat], LatLng is (lat, lng)
@@ -88,6 +105,19 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
           
         } else if (geometry['type'] == 'Point') {
           final coordinates = geometry['coordinates'];
+          
+          // Handle malformed Point coordinates
+          if (coordinates == null || coordinates.isEmpty) {
+            print("⚠️ Skipping point with empty coordinates: $name");
+            continue;
+          }
+          
+          // Check if coordinates have both longitude and latitude
+          if (coordinates.length < 2) {
+            print("⚠️ Skipping point with incomplete coordinates: $name (only ${coordinates.length} values)");
+            continue;
+          }
+          
           final LatLng point = LatLng(coordinates[1], coordinates[0]);
           
           // Choose icon based on type
@@ -131,6 +161,12 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
           
         } else if (geometry['type'] == 'LineString') {
           final coordinates = geometry['coordinates'];
+          
+          if (coordinates == null || coordinates.isEmpty) {
+            print("⚠️ Skipping linestring with empty coordinates: $name");
+            continue;
+          }
+          
           List<LatLng> points = coordinates.map<LatLng>((coord) => 
             LatLng(coord[1], coord[0])
           ).toList();
@@ -143,17 +179,115 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
         }
       }
       
+      // Process graph data if it exists
+      final metadata = geoJsonData['_metadata'];
+      if (metadata != null && metadata['graph'] != null) {
+        try {
+          final graph = metadata['graph'];
+          print("📊 Processing graph data...");
+          
+          // Process graph nodes
+          final nodes = graph['nodes'] as List?;
+          Map<String, int> nodeIdToIndex = {};
+          
+          if (nodes != null) {
+            print("📍 Processing ${nodes.length} graph nodes...");
+            for (int i = 0; i < nodes.length; i++) {
+              var node = nodes[i];
+              if (node['coordinates'] != null && node['coordinates'].length >= 2) {
+                final LatLng nodePoint = LatLng(node['coordinates'][1], node['coordinates'][0]);
+                
+                // Store node ID to index mapping
+                if (node['id'] != null) {
+                  nodeIdToIndex[node['id'].toString()] = i;
+                }
+                
+                graphNodeMarkers.add(Marker(
+                  point: nodePoint,
+                  width: 20,
+                  height: 20,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.purple,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1),
+                    ),
+                    child: Icon(
+                      Icons.circle,
+                      color: Colors.white,
+                      size: 8,
+                    ),
+                  ),
+                ));
+              }
+            }
+          }
+          
+          // Process graph edges
+          final edges = graph['edges'] as List?;
+          if (edges != null && nodes != null) {
+            print("🔗 Processing ${edges.length} graph edges...");
+            for (var edge in edges) {
+              try {
+                int? fromIndex;
+                int? toIndex;
+                
+                // Handle both string IDs and integer indices
+                if (edge['from'] is String) {
+                  fromIndex = nodeIdToIndex[edge['from']];
+                } else if (edge['from'] is int) {
+                  fromIndex = edge['from'];
+                }
+                
+                if (edge['to'] is String) {
+                  toIndex = nodeIdToIndex[edge['to']];
+                } else if (edge['to'] is int) {
+                  toIndex = edge['to'];
+                }
+                
+                if (fromIndex != null && toIndex != null && 
+                    fromIndex < nodes.length && toIndex < nodes.length) {
+                  final fromNode = nodes[fromIndex];
+                  final toNode = nodes[toIndex];
+                  
+                  if (fromNode['coordinates'] != null && fromNode['coordinates'].length >= 2 &&
+                      toNode['coordinates'] != null && toNode['coordinates'].length >= 2) {
+                    final LatLng fromPoint = LatLng(fromNode['coordinates'][1], fromNode['coordinates'][0]);
+                    final LatLng toPoint = LatLng(toNode['coordinates'][1], toNode['coordinates'][0]);
+                    
+                    graphEdgeLines.add(Polyline(
+                      points: [fromPoint, toPoint],
+                      color: Colors.red.withOpacity(0.7),
+                      strokeWidth: 2.0,
+                    ));
+                  }
+                }
+              } catch (e) {
+                print("⚠️ Error processing edge: $e");
+              }
+            }
+          }
+          
+          print("🔗 Loaded ${graphNodeMarkers.length} graph nodes and ${graphEdgeLines.length} graph edges");
+        } catch (e) {
+          print("⚠️ Error processing graph data: $e");
+          // Continue without graph data
+        }
+      }
+      
       setState(() {
         geoJsonPolygons = polygons;
         geoJsonMarkers = markers;
         geoJsonPolylines = polylines;
+        graphNodes = graphNodeMarkers;
+        graphEdges = graphEdgeLines;
         isLoading = false;
       });
       
       print("🎯 Loaded ${polygons.length} polygons, ${markers.length} markers, ${polylines.length} polylines from GeoJSON");
       
     } catch (e) {
-      print("❌ Error loading draft_elements.geojson: $e");
+      print("❌ Error loading DemoDayRoughDraft.geojson: $e");
       
       // Try fallback to sample_elements.geojson
       try {
@@ -206,6 +340,8 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
           geoJsonPolygons = polygons;
           geoJsonMarkers = [];
           geoJsonPolylines = [];
+          graphNodes = [];
+          graphEdges = [];
           isLoading = false;
         });
         
@@ -250,6 +386,15 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
         ),
         title: const Text("Simple Map Test"),
         actions: [
+          IconButton(
+            icon: Icon(showGraph ? Icons.visibility_off : Icons.visibility),
+            onPressed: () {
+              setState(() {
+                showGraph = !showGraph;
+              });
+            },
+            tooltip: showGraph ? 'Hide Graph' : 'Show Graph',
+          ),
           IconButton(
             icon: const Icon(Icons.fit_screen),
             onPressed: () {
@@ -327,7 +472,12 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
               polylines: geoJsonPolylines,
             ),
             
-            // Step 2C: GeoJSON Markers Layer (for POIs)
+            // Step 2C: Graph Edges Layer (for navigation graph)
+            if (showGraph) PolylineLayer(
+              polylines: graphEdges,
+            ),
+            
+            // Step 2D: GeoJSON Markers Layer (for POIs)
             MarkerLayer(
               markers: [
                 // User location marker
@@ -350,6 +500,8 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
                 ),
                 // Add all GeoJSON markers
                 ...geoJsonMarkers,
+                // Add all graph node markers
+                if (showGraph) ...graphNodes,
               ],
             ),
           ],
