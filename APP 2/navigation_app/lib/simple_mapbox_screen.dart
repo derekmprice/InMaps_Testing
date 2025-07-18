@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:convert';
+import 'package:url_launcher/url_launcher.dart';
 
 class SimpleMapScreen extends StatefulWidget {
   @override
@@ -18,6 +19,7 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
   List<Marker> graphNodes = [];
   bool isLoading = true;
   bool showGraph = false;
+  Map<String, dynamic>? geoJsonData; // Store parsed GeoJSON data // Store parsed GeoJSON data
   
   // Center of your GeoJSON polygons (updated for draft_elements.geojson)
   static const LatLng centerLocation = LatLng(33.77466, -84.40163);  // Center of draft polygons
@@ -39,7 +41,7 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
       print("🔍 Starting to load GeoJSON...");
       
       // Load GeoJSON from assets
-      String jsonString = await rootBundle.loadString('assets/DemoDayRoughDraft.geojson');
+      String jsonString = await rootBundle.loadString('assets/ExhibitionHallFloor1.geojson');
       
       print("📄 Raw JSON length: ${jsonString.length}");
       print("📄 First 100 chars: ${jsonString.length > 100 ? jsonString.substring(0, 100) : jsonString}");
@@ -47,8 +49,8 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
       if (jsonString.isEmpty) {
         throw Exception("GeoJSON file is empty");
       }
-      
-      final geoJsonData = jsonDecode(jsonString);
+      final parsedGeoJsonData = jsonDecode(jsonString);
+      geoJsonData = parsedGeoJsonData; // Save to class variable
       print("✅ JSON parsed successfully");
       
       List<Polygon> polygons = [];
@@ -56,9 +58,10 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
       List<Polyline> polylines = [];
       List<Polyline> graphEdgeLines = [];
       List<Marker> graphNodeMarkers = [];
+
       
       // Parse features from GeoJSON
-      final features = geoJsonData['features'] as List?;
+      final features = geoJsonData != null ? geoJsonData!['features'] as List? : null;
       if (features == null) {
         throw Exception("No 'features' array found in GeoJSON");
       }
@@ -141,23 +144,48 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
               iconColor = Colors.orange;
           }
           
-          markers.add(Marker(
-            point: point,
-            width: 40,
-            height: 40,
-            child: Container(
-              decoration: BoxDecoration(
-                color: iconColor,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
+          // Update: Only add table number markers for 'marker' icon type
+          if (icon == 'marker') {
+            markers.add(Marker(
+              point: point,
+              width: 20,
+              height: 12,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  properties['tableNumber'] ?? '',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
               ),
-              child: Icon(
-                iconData,
-                color: Colors.white,
-                size: 20,
+            ));
+          } else {
+            markers.add(Marker(
+              point: point,
+              width: 30,
+              height: 30,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: iconColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Icon(
+                  iconData,
+                  color: Colors.white,
+                  size: 15,
+                ),
               ),
-            ),
-          ));
+            ));
+          }
           
         } else if (geometry['type'] == 'LineString') {
           final coordinates = geometry['coordinates'];
@@ -180,7 +208,7 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
       }
       
       // Process graph data if it exists
-      final metadata = geoJsonData['_metadata'];
+      final metadata = geoJsonData!['_metadata'];
       if (metadata != null && metadata['graph'] != null) {
         try {
           final graph = metadata['graph'];
@@ -375,6 +403,50 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
     }
     return oddNodes;
   }
+  
+  // Helper method to build action buttons for the popup
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return InkWell(
+      onTap: onPressed,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.blue),
+            SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper method to build tag chips
+  Widget _buildTag(String label) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.blue,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -436,9 +508,273 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
             minZoom: 15.0,
             maxZoom: 22.0,
             onTap: (tapPosition, point) {
-              print("🗺️ Map tapped at: ${point.latitude}, ${point.longitude}");
-              
-              // Check if tap hit any polygon
+              // Check if the tap hit any marker
+              for (var marker in geoJsonMarkers) {
+                if ((marker.point.latitude - point.latitude).abs() < 0.000005 &&
+                    (marker.point.longitude - point.longitude).abs() < 0.000005) {
+                  // Access the properties of the tapped marker
+                  Map<String, dynamic>? tappedFeature;
+                  
+                  if (geoJsonData != null && geoJsonData!['features'] != null) {
+                    for (var feature in geoJsonData!['features']) {
+                      if (feature['geometry'] != null && 
+                          feature['geometry']['type'] == 'Point' &&
+                          feature['geometry']['coordinates'] != null) {
+                        var coords = feature['geometry']['coordinates'];
+                        if (coords.length >= 2 && 
+                            (coords[1] - marker.point.latitude).abs() < 0.0000005 &&
+                            (coords[0] - marker.point.longitude).abs() < 0.0000005) {
+                          tappedFeature = feature;
+                          break;
+                        }
+                      }
+                    }
+                  }
+                  
+                  if (tappedFeature != null) {
+                    final properties = tappedFeature['properties'];
+                    final name = properties['name'] ?? 'Unknown';
+                    final icon = properties['icon'] ?? 'marker';
+                    
+                    // Check if this is a marker type POI (table) or another type of POI
+                    if (icon == 'marker') {
+                      // For marker type POIs, show the detailed popup
+                      final description = properties['description'] ?? 'No description available';
+                      final link = properties['link'] ?? 'No link available';
+
+                      // Get additional properties with default values
+                      final email = properties['email'] ?? 'No email available';
+                      final phone = properties['phone'] ?? properties['tableNumber'] ?? 'No phone available';
+                      
+                      // Show a dialog with the enhanced table details
+                      showDialog(
+                        context: context,
+                        builder: (context) {
+                        return Dialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Container(
+                            width: double.maxFinite,
+                            constraints: BoxConstraints(maxWidth: 500),
+                            padding: EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Title with close button
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.close),
+                                      onPressed: () => Navigator.of(context).pop(),
+                                    ),
+                                  ],
+                                ),
+                                
+                                // Action buttons row
+                                Container(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      _buildActionButton(
+                                        icon: Icons.directions,
+                                        label: 'Directions',
+                                        onPressed: () {
+                                          // Directions action
+                                          Navigator.of(context).pop();
+                                          // Navigate to directions screen
+                                        },
+                                      ),
+                                      _buildActionButton(
+                                        icon: Icons.schedule,
+                                        label: 'Visit',
+                                        onPressed: () {
+                                          // Visit action
+                                        },
+                                      ),
+                                      _buildActionButton(
+                                        icon: Icons.bookmark_border,
+                                        label: 'Bookmark',
+                                        onPressed: () {
+                                          // Bookmark action
+                                        },
+                                      ),
+                                      _buildActionButton(
+                                        icon: Icons.language,
+                                        label: 'Website',
+                                        onPressed: () {
+                                          // Open link in browser
+                                          if (link.isNotEmpty && link != 'No link available') {
+                                            launchUrl(Uri.parse(link));
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                
+                                Divider(),
+                                
+                                // Tags area (placeholder for now)
+                                Container(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Tags:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 4,
+                                        children: [
+                                          _buildTag('Exhibition'),
+                                          _buildTag('Technology'),
+                                          _buildTag('Innovation'),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                
+                                Divider(),
+                                
+                                // Description and logo area
+                                Container(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Description
+                                      Expanded(
+                                        flex: 3,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Description:',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            SizedBox(height: 4),
+                                            Text(
+                                              description.isEmpty || description == 'No description available' 
+                                                ? 'No description available for this exhibitor.'
+                                                : description,
+                                              style: TextStyle(fontSize: 14),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      
+                                      SizedBox(width: 12),
+                                      
+                                      // Logo
+                                      Expanded(
+                                        flex: 1,
+                                        child: Container(
+                                          height: 80,
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade200,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: properties['imageUrl'] != null && properties['imageUrl'].toString().isNotEmpty
+                                            ? Image.network(
+                                                properties['imageUrl'],
+                                                fit: BoxFit.contain,
+                                                errorBuilder: (context, error, stackTrace) => 
+                                                  Icon(Icons.business, size: 40, color: Colors.grey),
+                                              )
+                                            : Icon(Icons.business, size: 40, color: Colors.grey),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                
+                                Divider(),
+                                
+                                // Contact information
+                                Container(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Contact:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.phone, size: 16, color: Colors.blue),
+                                          SizedBox(width: 8),
+                                          Text(phone, style: TextStyle(fontSize: 14)),
+                                        ],
+                                      ),
+                                      SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.email, size: 16, color: Colors.blue),
+                                          SizedBox(width: 8),
+                                          Text(email, style: TextStyle(fontSize: 14)),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                    } else {
+                      // For non-marker type POIs, show a simple popup with just the name
+                      showDialog(
+                        context: context,
+                        builder: (context) {
+                          return AlertDialog(
+                            title: Text(name),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: Text('Close'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    }
+                  }
+                  return;
+                }
+              }
+
+
+              // If no marker was tapped, check polygons
               String tappedPolygon = "None";
               for (var polygon in geoJsonPolygons) {
                 if (_isPointInPolygon(point, polygon.points)) {
@@ -446,10 +782,10 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
                   break;
                 }
               }
-              
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text("Tapped: $tappedPolygon at ${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}"),
+                  content: Text("Tapped: \\${tappedPolygon} at \\${point.latitude.toStringAsFixed(6)}, \\${point.longitude.toStringAsFixed(6)}"),
                   duration: Duration(seconds: 3),
                 ),
               );
@@ -483,18 +819,13 @@ class _SimpleMapScreenState extends State<SimpleMapScreen> {
                 // User location marker
                 Marker(
                   point: centerLocation,
-                  width: 40,
-                  height: 40,
+                  width: 20,
+                  height: 20,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.purple,
+                      color: Colors.blue, // Blue dot for GPS-like appearance
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                    ),
-                    child: Icon(
-                      Icons.person,
-                      color: Colors.white,
-                      size: 20,
+                      border: Border.all(color: Colors.white, width: 2),
                     ),
                   ),
                 ),

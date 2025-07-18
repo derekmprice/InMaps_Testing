@@ -38,6 +38,7 @@ dependencies:
   # Add these for map functionality
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
+  url_launcher: ^6.1.7
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +76,7 @@ flutter:
     - assets/sample_elements.geojson
     - assets/draft_elements.geojson
     - assets/DemoDayRoughDraft.geojson
+    - assets/ExhibitionHallFloor1.geojson
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
